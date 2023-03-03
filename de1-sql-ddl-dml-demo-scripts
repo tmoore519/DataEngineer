@@ -1,0 +1,426 @@
+
+
+Welcome to DE1 Week 1 - SQL Fundamentals
+
+/******************************** RDS SQL Server Express - demo-db - connection instructions **************************************/
+
+database host/instance: de-students.ccy4zvvkw0jj.us-west-2.rds.amazonaws.com
+database: rds_stream
+port: 1433
+user: user-001
+password: Resu!@pt-001
+
+/******************************* Create database, schema, table, view and index view ********************************************/
+
+/******************************************************************************************************************************/
+/***
+/***                                               DDL for DE1 Week 1
+/***
+/******************************* Create database, schema, table, view and index view ********************************************/
+CREATE DATABASE sales;
+
+USE sales;
+CREATE SCHEMA commission;
+
+DROP TABLE IF EXISTS commission.quotations
+
+CREATE TABLE commission.quotations (
+    quotation_no INT IDENTITY PRIMARY KEY,
+    valid_from DATE NOT NULL,
+    valid_to DATE NOT NULL
+);
+
+INSERT INTO commission.quotations (valid_from, valid_to) VALUES ('2022-05-25', '2022-05-31'), ('2022-06-25', '2022-06-30'), ('2022-07-25', '2022-07-31'), ('2022-08-25', '2022-08-31');
+
+CREATE VIEW sales_quotes_vw
+AS (
+SELECT * FROM commission.quotations WHERE valid_from BETWEEN '2022-01-01' AND '2022-06-01'
+)
+
+SELECT * FROM commission.quotations
+
+SELECT * FROM sales_quotes_vw
+
+
+CREATE VIEW sales_quotes_idx_vw
+WITH SCHEMABINDING
+AS (
+SELECT * FROM commission.quotations WHERE valid_from BETWEEN '2022-06-01' AND '2022-08-01'
+)
+
+
+CREATE VIEW sales_quotes_idx_vw
+WITH SCHEMABINDING
+AS (
+SELECT quotation_no, valid_from, valid_to FROM commission.quotations WHERE valid_from BETWEEN '2022-06-01' AND '2022-08-01'
+)
+
+SELECT * FROM sales_quotes_idx_vw
+
+/*************************************** Stored Procs ***********************************************************************/
+
+CREATE PROCEDURE sp_temp
+AS
+BEGIN
+    SELECT *
+    FROM sales_quotes_vw
+    UNION
+    SELECT *
+    FROM sales_quotes_idx_vw
+END;
+
+EXEC sp_temp;
+
+
+/******************************************************************************************************************************/
+/***
+/***                                               DML for DE1 Week 1
+/*******************************************************************************************************************************/
+SELECT
+    imdb_id,
+    title,
+    release_date,
+    rated,
+    running_time_in_min,
+    genre,
+    writer,
+    director,
+    actors,
+    language,
+    country,
+    awards,
+    dvd_date,
+    plot,
+    poster,
+    metascore,
+    imdb_rating,
+    imdb_votes,
+    world_box_gross,
+    domestic_box_gross,
+    international_box_gross,
+    domestic_share,
+    tickets_sold,
+    release_year
+FROM rds_stream.dbo.movies
+
+/*************-----------------------------------------------**************  "*" wildcard = get all columns */
+
+SELECT *
+FROM rds_stream.dbo.movies;
+
+
+/********************************************TOP, LIMIT and DISTINCT ************************************************************/
+
+SELECT TOP 10 *
+FROM rds_stream.dbo.movies;	/*** Some RDBMS like SQL Server use the TOP keyword in the SELECT statement */
+
+/*************-----------------------------------------------**************/
+
+SELECT *
+FROM rds_stream.dbo.movies LIMIT 10;	/*** Some RDBMS like PostgreSQL use LIMIT keyword as the very last line in the query */
+
+/*************-----------------------------------------------**************/
+
+SELECT 
+	DISTINCT(title) 
+FROM rds_stream.dbo.movies 
+
+
+/************************************    Column selection and Derived Columns ****************************************************************/
+
+SELECT 
+	imdb_id, 
+	title								/****** select only columns you need */
+FROM rds_stream.dbo.movies;
+
+/*************-----------------------------------------------**************/
+
+SELECT 
+	imdb_id, 
+	'hello Im a derived columns' as derived_col_string,	 /*********** literal as derived column */
+	100 as derived_col_int
+FROM rds_stream.dbo.movies;
+
+/*************-----------------------------------------------**************/
+
+SELECT 
+    imdb_id,
+    title,
+    release_date,
+    rated,
+    running_time_in_min,
+	getdate() as ingest_date 			/*********** func as derived column */
+FROM rds_stream.dbo.movies;
+
+
+/**************************************   	GROUP BY       *************************************************************************************/
+
+SELECT 								/****** GROUP BY because of he aggregate in the SELECT staemement */
+	imdb_id,
+	COUNT(title) as number_titles
+FROM rds_stream.dbo.movies 
+GROUP BY imdb_id
+ORDER BY imdb_id					/*** ORDER BY asending (asc) is the default */
+
+/*************-----------------------------------------------**************/
+
+SELECT 								/****** GROUP BY because of he aggregate in the SELECT staemement*/
+	imdb_id,
+	COUNT(title) as number_showings
+FROM rds_stream.dbo.movies 
+GROUP BY loc_id
+ORDER BY loc_id desc 				/*** ORDER BY descending order*/
+
+
+
+/*************-----------------------------------------------**************  
+
+SELECT *, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' fake_title INTO rds_stream.dbo.movies2 FROM rds_stream.dbo.movies
+
+INSERT INTO rds_stream.dbo.movies2 (imdb_id, title, fake_title, genre, writer, director, actors) ( /* for existing table inserts */
+    SELECT 'tt011xxxx' as imdb_id, title,
+           'Aladdin' as fake_title, genre,
+           writer,
+           director,
+           actors
+    FROM rds_stream.dbo.movies as m
+    WHERE imdb_id = 'tt0110357'
+)
+
+/*************-----------------------------------------------************** 
+
+SELECT * into #temp_tbl FROM rds_stream.dbo.movies2
+WHERE imdb_id = 'tt011xxxx'
+
+/*************-----------------------------------------------************** 
+
+UPDATE #temp_tbl set imdb_id  = 'bad id?', title = 'bad title'
+WHERE imdb_id = 'tt011xxxx'
+
+/*************-----------------------------------------------************** 
+
+DELETE FROM rds_stream.dbo.movies2 WHERE imdb_id = 'tt011xxxx'
+
+
+/*********************************************************************************************************************************/
+SELECT COUNT(*) FORM rds_Stream.dbo.now_showing
+
+SELECT TOP 1000
+    auditorium_id,
+    imdb_id,
+    title,
+    theater_id,
+    nbr_schedules,
+    now_showing
+FROM rds_stream.dbo.now_showing;
+
+
+/**********************************************************************************************************************************/
+
+SELECT
+    DISTINCT
+    imdb_id,
+    title,
+	(select max(nbr_schedules) FROM rds_stream.dbo.now_showing WHERE imdb_id = m.imdb_id) as nbr_schedules,     /********* subquery as a derived column*/
+    release_date,
+    rated,
+    running_time_in_min,
+    genre,
+    (select max(now_showing) FROM rds_stream.dbo.now_showing WHERE imdb_id = m.imdb_id) as now_showing,     /********* subquery as a derived column*/
+	getdate() as ingest_date
+FROM rds_stream.dbo.movies as m
+WHERE m.imdb_id in (SELECT DISTINCT TOP 1000 imdb_id FROM rds_stream.dbo.now_showing)
+
+/**********************************************************************************************************************************/
+
+/*************-----------------------------------------------************** DELETE with JOIN
+
+DELETE FROM rds_stream.dbo.movies m
+JOIN rds_stream.dbo.movies2 as m2
+ON m.imdb_id = m2.imdb_id
+WHERE m2.imdb_id = 'tt011xxxx'
+
+
+
+
+/**************************************************  CTE  and JOIN Intro   ***************************************************************/
+/**** Basic Inner Join ****/
+
+
+
+SELECT top 1000 *									/**** Returns all columns for each table, first the columns for the left table, then the columns for the right column where the columns in the ON condition match*/
+FROM rds_stream.dbo.movies as m       /**** If both tables have a column that has the same name in each, you will get a error about abiguity.*/
+JOIN rds_stream.dbo.now_showing as ns
+ON m.imdb_id = ns.imdb_id
+
+
+
+/**********************************************************************************************************************************/
+
+WITH demo_cte (movie_db_id, titles)
+AS
+(
+SELECT 
+	imdb_id as movie_db_id,				/** using a column alias in the CTE needs to be used when referencing this column from demo_cte*/
+	COUNT(title) as titles
+FROM rds_stream.dbo.movies 
+GROUP BY imdb_id
+)
+SELECT 
+	m.imdb_id,
+	cte.movie_db_id
+FROM rds_stream.dbo.movies as m
+JOIN demo_cte as cte
+ON m.imdb_id = cte.movie_db_id
+
+
+/*************-----------------------------------------------**************/   
+
+WITH demo_cte (movie_db_id, titles)
+AS
+(
+SELECT 
+	imdb_id as movie_db_id,	
+	title,						/** using a column alias in the CTE needs to be used when referencing this column from demo_cte*/
+	COUNT(title) as titles
+FROM rds_stream.dbo.movies 
+GROUP BY imdb_id, title
+),
+demo_cte_2 AS (
+SELECT TOP 100
+	location_id,
+	now_showing,
+	imdb_id
+FROM rds_stream.dbo.now_showing
+WHERE imdb _id = demo_cte.movie_db_id
+)
+SELECT 
+	cte.movie_db_id,
+	cte.title,
+	cte2.now_showing
+FROM demo_cte as cte
+JOIN demo_cte_2 as cte2 
+ON cte.id_location_of_theater = cte2.location_id 
+WHERE cte2.now_showing = '2019-12-25'
+
+
+
+/**********************************************************************************************************************************/
+
+
+SELECT 
+	ns.imdb_id, 
+	(select nbr_theaters FROM rds_stream.dbo.now_showing where imdb_id = m.imdb_id) as nbr_theaters,     /********* subquery as a derived column*/
+	movies, 
+	loc_id, 
+	nbr_schedules, 
+	imdb_id, 
+	title, 
+	getdate() as ingest_date   /***** new derived column ***/
+FROM rds_stream.dbo.movies as m
+JOIN (
+	SELECT TOP 1000
+		imdb_id,
+		theater_id
+	FROM rds_stream.dbo.now_showing) as ns  /*** A derived table in a JOIN*/
+ON m.imdb_id = ns.imdb_id
+
+/**********************************************************************************************************************************/
+
+
+SELECT   						/******* Same result as above. If no column names match between the tables, you can avoid adding the table alias to prefix the respective columns. */ 
+	m.imdb_id, 				/******* If they do have matching column names, you only need to put the table alias prefix for those columns */
+	m.title,			/******* That being said, it's best practice to add the table alias as a prefix to the columns belonging to that table.*/
+    m.release_date,
+    m.rated,
+    m.running_time_in_min,
+    m.genre,
+    m.writer,
+    m.director,
+    m.actors,
+    m.language,
+    m.country,
+    m.awards,
+    m.dvd_date,
+    m.plot,
+    m.poster,
+    m.metascore,
+    m.imdb_rating,
+    m.imdb_votes,
+    m.world_box_gross,
+    m.domestic_box_gross,
+    m.international_box_gross,
+    m.domestic_share,
+    m.tickets_sold,
+    m.release_year
+	ns.auditorium_id, 
+	ns.now_showing, 
+	ns.imdb_id, 
+	ns.title, 
+	ns.theater_id, 
+	ns.nbr_schedules 
+FROM rds_stream.dbo.movies as m
+JOIN rds_stream.dbo.now_showing as ns
+ON m.imdb_id = ns.imdb_id
+
+
+/**********************************************************************************************************************************/
+
+SELECT 								/****** one benifit to adding the table alias prefix is that you can put the columns from each table in whatever order you what the results to come back*/
+	'Now Showing' as announcement,
+	COUNT(m.imdb_id) as cnt, 	
+	.m.title as movie,
+	COUNT(ns.theater_id) as in_theaters
+FROM rds_stream.dbo.movies as m 
+JOIN rds_stream.dbo.now_showing as ns
+ON m.imdb_id = ns.imdb_id
+WHERE m.imdb_id IS NOT NULL or ns.imdb_id IS NOT NULL
+
+/**********************************************************************************************************************************/
+
+
+SELECT 								/****** one benifit to adding the table alias prefix is that you can put the columns from each table in whatever order you what the results to come back*/
+	ns.theater_id,
+	COUNT(m.title) as number_showings
+FROM rds_stream.dbo.movies as m 
+JOIN rds_stream.dbo.now_showing ns
+ON nm.imdb_id = m.imdb_id
+GROUP BY ns.theater_id
+ORDER BY ns.theater_id
+
+/**********************************************************************************************************************************/
+
+
+SELECT 								
+	*
+FROM rds_stream.dbo.movies as m
+FULL OUTER JOIN rds_stream.dbo.now_showing ns
+ON nm.imdb_id = m.imdb_id
+order by ns.imdb_id DESC 
+
+/**********************************************************************************************************************************/
+
+
+SELECT 								
+	ns.theater_id,
+	COUNT(m.title) as number_showings
+FROM rds_stream.dbo.movies as m 
+LEFT OUTER JOIN rds_stream.dbo.now_showing ns
+ON nm.imdb_id = m.imdb_id
+
+WHERE ns.imdb_id IS NULL
+
+/**********************************************************************************************************************************/
+
+
+SELECT 								
+	*
+FROM rds_stream.dbo.movies as ns 
+RIGHT OUTER JOIN rds_stream.dbo.cine_royal_list as crl
+ON ns.loc_id = crl.location_id
+
+WHERE ns.loc_id IS NULL
+
+/**********************************************************************************************************************************/
+
+
